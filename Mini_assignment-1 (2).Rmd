@@ -1,0 +1,114 @@
+---
+title: "mini proj"
+author: "Julie"
+date: '2022-07-20'
+output: pdf_document
+---
+
+Q1
+```{r}
+set.seed(1007303552)
+n.sim=100
+n=100
+b1<- c()
+b0 <- c()
+y_list <- c()
+
+for (i in 1:n.sim){
+        e<-rnorm(n, 0 ,2)
+        x<-rnorm(n, 0, 1)
+        y<-0.5 + 3*x + e
+        model<- lm(y~x)
+        mod <- summary(model)
+        b1_estimated <- mod$coefficients[2, 1]
+        b1[i] <- b1_estimated
+}
+
+b1
+```
+
+Q2
+```{r}
+set.seed(1007303552)
+r_list <- c()
+for (k in 1:n.sim){
+        e<-rnorm(n, 0 ,2)
+        x<-rnorm(n, 0, 1)
+        y<-0.5 + 3*x + e
+        model <- lm(y~x)
+        b1_estimated <- b1[k]
+        b0_estimated <- mean(y) - b1_estimated * mean(x)
+        y_estimated <-b0_estimated + b1_estimated*x
+        y_average <- mean(y)
+        SSREG <- sum((y_estimated-y_average)^2)
+        SST <- sum((y_estimated-y_average)^2)+sum((y-y_estimated)^2)
+        R_2 <- SSREG/SST
+        r <- R_2^(1/2)
+        r_list[k] <- r
+}
+r_list
+```
+
+Q3
+```{r}
+hist(r_list)
+```
+The histogram shows that r is roughly bell shaped and symmetric around r = 0.85, with a slight skew to the left. This makes sense because the distribution of r is not certainly normal because we know that r=Sx/Sy * β1estimate. The slope is linear, but there is also one distribution on the y variable and maybe Sy is not linear.
+
+
+Q4 
+```{r}
+set.seed(1007303552)
+b1_tlist <- c()
+for (i in 1:n.sim){
+        e<-rnorm(n, 0 ,2)
+        x<-rnorm(n, 0, 1)
+        y<-0.5 + 3*x + e
+        model<- lm(y~x)
+        b1_estimated <- b1[i]
+        b0_estimated <- mean(y) - b1_estimated * mean(x)
+        y_estimated <-b0_estimated + b1_estimated*x
+        standard_er <- summary(model)$coefficients[2,2]
+        t <- b1_estimated/standard_er
+        b1_tlist[i] <- t
+}
+hist(b1_tlist,prob=TRUE)
+
+```
+From the histogram, we can tell that t* for each B1 estimates follow t distribution.
+
+Q5
+```{r}
+set.seed(1007303552)
+hist(b1_tlist,prob=TRUE)
+abline(v=mean(b1_tlist),col="red")
+```
+
+The mean of t* for b1 estimates is around 15 with a degree of freedom= 98. This indicates that p-val for b1 hypothesis test is extremely small and near 0, which indicates statistical significance of B1 and strong evidence to against null hypothesis that b1=0. 
+
+
+Q6
+```{r}
+set.seed(1007303552)
+t2list <- c()
+r_list <- c()
+for (i in 1:n.sim){
+        e<-rnorm(n, 0 ,2)
+        x<-rnorm(n, 0, 1)
+        y<-0.5 + 3*x + e
+        sxy <- sum((x-mean(x))*(y-mean(y)))
+        sxx <- sum((x-mean(x))^2)
+        syy <- sum((y-mean(y))^2)
+        r <- sxy/((sxx*syy)^(1/2))
+        t_2 <- r*((n-2)^(1/2))/((1-r^2)^(1/2))
+        t2list <- append(t2list,t_2)
+}
+hist(t2list,prob=TRUE)
+abline(v=mean(b1_tlist),col="red")
+```
+The mean of t* for r estimates is around 15 with a degree of freedom= 98. This indicates that p-val for r hypothesis test is extremely small and near 0, which indicates statistical significance of r and strong evidence to against null hypothesis that ρ =0. 
+
+Q7
+If we reject the null hypothesis that slope B1 = 0 in question 4, then there is a linear relationship between two variables x and y. The coefficient correlation in question 6 measure how closely two variables are related with one another, if we reject the null hypthesis that there is no correlation (ρ =0) between x and y, then it has the same implication as rejecting the null hypothesis in q4: x and y are correlated.
+
+Q8. Attach as a pdf. 
