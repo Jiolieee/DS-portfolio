@@ -7,7 +7,7 @@ output: pdf_document
 
 Q1
 ```{r}
-set.seed(1007303552)
+set.seed()
 n.sim=100
 n=100
 b1<- c()
@@ -29,7 +29,7 @@ b1
 
 Q2
 ```{r}
-set.seed(1007303552)
+set.seed()
 r_list <- c()
 for (k in 1:n.sim){
         e<-rnorm(n, 0 ,2)
@@ -58,7 +58,7 @@ The histogram shows that r is roughly bell shaped and symmetric around r = 0.85,
 
 Q4 
 ```{r}
-set.seed(1007303552)
+set.seed()
 b1_tlist <- c()
 for (i in 1:n.sim){
         e<-rnorm(n, 0 ,2)
@@ -79,7 +79,7 @@ From the histogram, we can tell that t* for each B1 estimates follow t distribut
 
 Q5
 ```{r}
-set.seed(1007303552)
+set.seed()
 hist(b1_tlist,prob=TRUE)
 abline(v=mean(b1_tlist),col="red")
 ```
@@ -89,7 +89,7 @@ The mean of t* for b1 estimates is around 15 with a degree of freedom= 98. This 
 
 Q6
 ```{r}
-set.seed(1007303552)
+set.seed()
 t2list <- c()
 r_list <- c()
 for (i in 1:n.sim){
