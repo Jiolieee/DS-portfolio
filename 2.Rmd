@@ -1,0 +1,341 @@
+---
+title: "Final Project"
+output:
+  pdf_document: default
+  html_document: default
+date: "2022-08-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(MASS)
+library(car)
+library(knitr)
+dat <- read.csv("302data.csv",header = TRUE)
+summary(dat)
+attach(dat)
+```
+
+```{r include=FALSE}
+test <- ggplot(dat, aes(x=Term.Test )) + 
+  geom_density()
+test + geom_vline(aes(xintercept=mean(Term.Test)),
+            color="blue", linetype="dashed", size=1)
+
+```
+
+```{r include=FALSE}
+# #remove outlier and noise, because most statistical parameters such as mean, standard deviation and correlation are highly sensitive to outliers.
+# # replace with mean 
+# 
+ dat_test <- dat[c("Studying", "COVID", "COVID2", "COVID3", "COVID4", 
+                "Misceallenous4", "Miscellaneous", "Miscellaneous2", "Miscellaneous3",
+                "Studying4", "Studying2", "Studying3","Term.Test")]
+ col_name <- colnames(dat_test)
+ print(dat_test$"Studying2")
+ for (i in seq(col_name)){
+         Q1 <- quantile(dat_test[,i], .25)
+         Q3 <- quantile(dat_test[,i], .75)
+         IQR <- IQR(dat_test[,i])
+        outlier_1 <- as.numeric(Q1 - 1.5*IQR)
+        outlier_2 <- as.numeric(Q3 + 1.5*IQR)
+        without_outlier <- subset(dat_test, dat_test[,i] > (Q1 - 1.5*IQR) & dat_test[,i] < (Q3+1.5*IQR))
+        mean <- mean(without_outlier[,i])
+        dat_test[,i][dat_test[,i] > outlier_2] <- mean
+        dat_test[,i][dat_test[,i] < outlier_1] <- mean
+ }
+ dat_test
+```
+
+```{r include=FALSE}
+dat1 <- dat %>% 
+        mutate(average_studying = ((Studying +Studying2 +Studying3 + Studying4)/4),
+               prereview_study = ((Studying +Studying2 +Studying3)/3),
+               pre_miscell =(Miscellaneous +Miscellaneous2 + Miscellaneous3)/3,
+               average_miscell = (Miscellaneous +Miscellaneous2 + Miscellaneous3 + Misceallenous4)/4,
+               pre_COVID =(COVID+COVID3+COVID2)/3,
+               average_COVID = (COVID+COVID3+COVID2+COVID4)/4,
+                Famiiliar = case_when(Famiiliar == 'Agree' ~ 1,
+                                Famiiliar == 'Strongly Agree' ~ 1,
+                                Famiiliar == 'Neutral' ~ 1,
+                                Famiiliar == 'Disagree' ~ 0,
+                                Famiiliar == 'Strong Disagree' ~0),
+         OH = case_when(OH == 'Once a week' ~ 1,
+                            OH == 'At least once a week' ~ 1,
+                            OH == 'Less than one time a week (on average)' 
+                            ~ 0,
+                            OH == 'Never' ~ 0))
+
+```
+
+```{r include=FALSE}
+#check for correlation of variable and pay attention to high val
+cor(Studying4,Term.Test) 
+#negative correlation? why would study more during final weeks and on average seems to decrease the grades?
+#1. people tends to study more as materia accumulate, with significant increase just before term test.
+#prereview study time have positive impacts
+cor(dat1$prereview_study,Term.Test)
+cor(dat1$average_studying,Term.Test) # partially pulled up by final weeks
+cor(dat1$prereview_study,dat1$average_studying)
+cor(Studying4,dat1$prereview_study) #highly correlated, should delete one
+cor(Studying4,dat1$average_studying)#highly correlated, should delete one
+cor(dat1$average_miscell, dat1$average_studying)
+cor(dat1$average_COVID, dat1$average_miscell)
+cor(dat1$average_COVID, dat1$average_studying)
+cor(dat1$Misceallenous4, dat1$average_miscell)#highly correlated, time period has little impact on Miscellaneous
+cor(dat1$pre_COVID, dat1$COVID4)
+cor(dat1$average_COVID, dat1$average_studying)
+
+```
+
+```{r include=FALSE}
+#assumption1: aggregate impacts from 4 variables
+# ggplot(data=dat,aes(x= average_studying, y=Term.Test))+geom_point()+geom_smooth(method="lm")
+ML<-lm(dat1$Term.Test ~  dat1$Studying4 +  dat1$prereview_study + dat1$COVID4 +dat1$Misceallenous4, data=dat1)
+summary(ML)
+# trade off between Rsquared and p-val
+```
+
+```{r include=FALSE}
+library("olsrr")
+ols_vif_tol(ML)
+```
+
+```{r include=FALSE}
+ML2<-lm(dat$Term.Test ~ dat1$average_studying + dat1$average_miscell +dat1$OH +dat1$Famiiliar, data=dat1)
+summary(ML2)
+```
+
+```{r include=FALSE}
+ML3<-lm(dat$Term.Test ~ dat1$prereview_study +dat1$pre_COVID + dat1$pre_miscell, data=dat1)
+summary(ML3)
+```
+
+```{r include=FALSE}
+## obtaining fitted values and residues
+fit_ML = fitted(ML)
+res.ML = resid(ML)
+
+#hist of residuals
+multi.ML = tibble(res.ML)
+multi.ML <-multi.ML %>% rename(X=res.ML)
+
+## histogram of residuals obtained from the model fit
+ggplot(multi.ML, aes(x=X))+geom_histogram(col="black", fill="red", bins=15)
+
+#the residual plot
+plot(fit_ML, res.ML, 
+     ylab="Residuals", xlab=" fitted values", 
+     main="Residual plot") 
+abline(h=0, col="red", lwd=3, lty=2)
+
+## the residuals should be spread out randomly across 0 
+residuals = tibble(fit_ML, res.ML)
+ggplot(residuals, aes(x=fit_ML, y=res.ML))+geom_point()+geom_hline(yintercept=0, col="red")+xlab("fitted values")+ylab("residuals")
+
+```
+
+## Introduction
+
+Our report aims to investigate and evaluate the factors that predict the student performance on the STA302 term test score. Several factors of interest include studying time for the course, time spent thinking about COVID and doing miscellaneous activities, frequency of attending office hours, and self-perceived familiarity toward the subject.
+
+### Experiment Information
+
+Experiment Information The experiment subjects are 110 U of T students who are taking the STA302 summer courses from July to August under the guidance of Professor. Nnenna. Data were collected on a weekly basis from week 1 to week 4 and students were asked to fill out a survey at the end of each week to answer the questions.
+
+### Purpose of Developing Model
+
+The primary objective of the model was to explain the impacts of several factors may have on students' study outcomes in STA302. The study can contribute to professors understanding the barriers for students to obtain better performance and correspondingly provide help and potential adjustment of content deliveries. Students can also consciously adjust their time allocation on each activity to facilitate learning outcomes.
+
+### Plan for developing model
+
+The development for this project can be divided into four stages: examining and analyzing data provided, constructing models to interpret assumptions, identifying limitations, and transforming variables, and finally validating models with testing data sets. With the intention of reaching optimized bias variance trade-off, the model explained the extent of impacts of several numerical and categorical factors on the test performance. Our most important focus will be the studying time before and during the preparation week (week 4), and how it along with other variables perform in the model. The model was successful at discovering the potential correlation impacts from week 1-3 average studying time, week 4 studying time, week 4 time spent thinking about COVID, and week 4 miscellaneous activity. However, the association of several variables with the test score can be quite counterintuitive and poor which will be further discussed in the following parts.
+
+## Exploratory data analysis
+
+There are a total of 110 observations, and 16 variables in the dataset. The variable denoted as Term.Test is the variable of interest, variable denoted as ID indicates the identity of each observation and the remaining variables. Denotations of Studying n, COVID n, Miscellaneous n, OH and Familiarity, are the predictor variables used to develop the regression model.
+
+The Number of Studying hours a student studied each week also includes the lecture hours, so the baseline should be 6. If a student spent less than 6 hours each, this means that the student might not have watched the lectures that week. The miscellaneous hours does not include the time of sleeping and eating.
+
+### Numerical Summary of the Numerical Variables
+
+```{r pressure, echo=FALSE}
+table1 <- data.frame("Variable"=c("Term.Test","Studying","Studying2", "Studying3","Studying4","COVID","COVID2","COVID3","COVID4","Miscellaneous","Miscellaneous2","Miscellaneous3","Miscellaneous4"),"Min"=c(8.50,0.00,0.00,0.00,0.00,0.00,0.00,0.000,0.0000,0.00,1.00,0.0,0.00),"First quantile"=c(24.00,4.00,7.00,9.25,11.25,0.50,0.50,0.025,0.1125,6.00,10.00,10.0,10.00),"Median"=c(33.25,6.00,0.00,12.50,16.00,1.00,1.00,1.000,1.0000,12.25,20.00,20.0,20.00),"Mean"=c(32.96,7.55,10.13,14.39,18.96,1.47,2.37,1.877,2.2704,17.88,31.81,29.4,27.04),"Third quantile"=c(43.00,10.00,12.00,16.75,24.00,2.00,2.00,2.000,2.0000,28.00,40.00,40.0,35.75),"Max"=c(56.00,48.00,27.00,40.00,63.00,10.00,60.00,13.000,40.0000,67.00,162.00,109.0,103.00))
+kable(table1,width = 70)
+
+```
+
+### Histogram
+
+Histogram is used to study the distribution of the variable denoted as Term Test values. From the graph below, we find that the Term Test grades are symmetrically binomially distributed, ranging from 8.5 to 56, with modes at about 25, and 45 which corresponds to the 1st and 3rd quantile of the dataset,24 and 43. The dotted blue line indicates the mean value of Term Test 32.96 which is close to the median 33.25, lining at almost the center of the distribution.
+
+```{r echo=FALSE}
+test <- ggplot(dat, aes(x=Term.Test )) + 
+  geom_histogram(col='black', fill='grey', bins = 15)+
+  xlab('Grade of Term Test')+
+  ylab('Frequency')+
+  ggtitle('Histogram of Term Test Grade')
+test + geom_vline(aes(xintercept=mean(Term.Test)),
+            color="blue", linetype="dashed", size=1)
+```
+
+### Box Plot
+
+Boxplot is used to further investigate the distribution of the numerical variables. The boxplot of Term Test displays information in correspondence with what is provided by the histogram above that the term test is symmetrically distributed. It also indicates that there is no outlier in the Term Test variable.
+
+```{r echo=FALSE}
+## investigate outlier of Term.Test
+## Boxplots
+boxplot(dat$Term.Test,
+        main = 'Boxplots of Term Test Grade',
+        ylab = 'Term Test Grade')
+```
+
+Investigating the boxplot of the numerical predictor variables, we find that all these 12 variables are right-skewed, with few possible outliers on the right tail. Comparing the studying hours each week, we find that the median increases from week 1 to week4, and the minimum remains the same. Week 4 has the greatest range and IQR among the four weeks, and also the largest maximum value. The IQRs of Week 1 and Week 2 are similar, while week 1 had greater range and larger maximum. The IQR of Week 3 is slightly wider than those of Week 1 and 2, while the range of Week 3 is smaller than that of Week 1, and so is the maximum.
+
+```{r echo=FALSE}
+##investigates the outliers
+##Boxplots of the predictor variables
+## Studying hours
+boxplot(dat$Studying, dat$Studying2, dat$Studying3, dat$Studying4,
+        main = 'Bosplots of Studying Hours Each Week',
+        ylab = 'Number of hours studying STA302',
+        names = c('Week 1', 'Week 2', 'Week 3', 'Week 4'))
+```
+
+The time of thinking about COVID-19 has a similar distribution throughout the four weeks. The minimum, median, and IQR are similar. However, there are differences in their range and maximum. Week 1 and Week 3 have the similar range, with week 3 has the slightly larger maximum, and range. Week 4 has greater range and maximum than Week 1 and 3, with its maximum about 4 times larger than those of week 1 and 3. Week 2 has the largest range and maximum, and its maximum is about six times larger than those of Week 1 and Week 3.
+
+```{r echo=FALSE}
+## COVID
+boxplot(dat$COVID, dat$COVID2, dat$COVID3, dat$COVID4,
+        main = 'Bosplots of COVID-19 Thinking Each Week',
+        ylab = 'Number of hours thinking about COVID-19',
+        names = c('Week 1', 'Week 2', 'Week 3', 'Week 4'))
+```
+
+Same as the above two groups, the distributions of the four weeks are similar, and all are right skewed. They have similar minimum and median, with the median of week 1 is slightly smaller than those of the other three weeks. IQRs of week 2 and week 3 are roughly the same, and they are slightly greater than that of week 4 and week 1. The IQRs of week 1 and 4 are similar, with week 1 having the smaller 1st quartile and 3rd quartile. The ranges of week 3 and week 4 are similar and greater than that of week 1. Week 2 has the greatest range and maximum.
+
+```{r echo=FALSE}
+## Miscellaneous 
+boxplot(dat$Miscellaneous, dat$Miscellaneous2, dat$Miscellaneous3, dat$Misceallenous4,
+        main = 'Bosplots of Miscellaneous activity Each Week',
+        ylab = 'Number of hours spending on miscellaneous activity',
+        names = c('Week 1', 'Week 2', 'Week 3', 'Week 4'))
+```
+
+### Correlation Study
+
+We expected that the time students spend on studying before (variable denoted as 'prereview_study' in our model, which takes the average of the number of hour spending on studying during the first three weeks) and during the term test preparation week (Week4), and therefore we viewed the correlation between each variable and students' term test grades. The result shows that the term test grade is positively correlated with the average studying hours during the first three weeks, and negatively correlated with time spent on studying in week 4. This negative correlation contradicts our previous assumption that spending more time on studying would lead to higher grades. Therefore, there should be some other variables correlated with it. The correlation matrix is displayed as below. Based on these correlations, we built up several models. The model development and selection are further discussed in the following sections.
+
+```{r echo=FALSE}
+attach(dat1)
+dat2 <- data_frame(tibble(Term.Test, Studying4, prereview_study, average_studying,
+                         average_miscell, average_COVID, Misceallenous4,
+                         Famiiliar))
+#correlation matrix
+cor(dat2)
+```
+
+
+## Model development section
+
+We started with finding predictors that may have relationship with the response variable Test Test grades by comman sense. We first think that the studying time of week4 'Studying4' is the most relevant predictor to the Term Test score, followed by the average studying time of the first three weeks, which we denoted as 'prereview_study'. Also we think that the length of time to think about covid in the fourth week 'COVID4' and other activities time in the fourth week 'Misceallenous4' also has a greater impact on the Term Test score, because the fourth week is our term test preparation week, and most students' study and review for the test test will be done in this week and thinking covid and doing other activities may take up some of the study time. Thus, we came up with the first model ML.
+
+$$\hat{Y}_{Term.Test} = {\hat{\beta} _{0}} +\hat{\beta} _{Studying\, 4}\, X_{1}+\hat{\beta} _{prereview\, study}\, X_{2} +\hat{\beta} _{COVID\, 4}\, X_{3} +\hat{\beta} _{Misceallenous\, 4}\, X_{4}$$
+
+However, as what we stated in EDA part, Term Test grade is negatively correlated with time spent on studying in week 4 'Studying4', then we replaced the 'Studying4' with 'average_studying' as these two predictors have the highest corrleation. In order to try as many different predictors as possible, we also replaced the 'prereview_study' with 'average_miscell'(four weeks average misceallenous time), replaced 'Misceallenous4' with 'OH' and also replaced 'COVID4' with 'Familiar' as we believe the frequence a student attend office hour('OH')and how comfortable a student feel about the course material('Familiar') also have relationship with the term test grade. Then, we came up with the second model ML2.
+
+$$\hat{Y}_{Term.Test} = {\hat{\beta} _{0}} +\hat{\beta} _{average\,studying}\, X_{1}+\hat{\beta} _{average\,miscell}\, X_{2} +\hat{\beta} _{OH}\, X_{3} +\hat{\beta} _{Famiiliar}\, X_{4}$$
+
+We finally tried other numerical predictors 'pre_COVID' and 'pre_miscell' that we believe have little to do with the Term Test grade, and came up with the third model ML3.
+
+$$\hat{Y}_{Term.Test} = {\hat{\beta} _{0}} +\hat{\beta} _{prereview\,study}\, X_{1}+\hat{\beta} _{pre\,COVID}\, X_{2} +\hat{\beta} _{pre\,miscell}\, X_{3}$$
+
+### Model Selection
+
+We had three models with different predictors and calculated each model's R\^2 adj, AIC and BIC. The results are shown in the table below. By comparing these values, we decided to choose model ML to be our final model as the model ML has the largest R\^2 adj 0.0389, the smallest AIC 860.224 and BIC 876.427.
+
+```{r echo=FALSE}
+model_selection<-data.frame("Model"=c("ML","ML2","ML3"),AIC=c(AIC(ML),AIC(ML2),AIC(ML3)),BIC=c(BIC(ML),BIC(ML2),BIC(ML3)),"R Square"=c(summary(ML)$adj.r.squared,summary(ML2)$adj.r.squared,summary(ML3)$adj.r.squared))
+kable(model_selection, width = 70)
+```
+
+### Model Diagnostics
+
+Assumption 1: Linearity From the residual plot, we did not find any patterns of the residuals and all the residuals are randomly distributed on the plot. The first assumption is satisfied.
+
+Assumption 2: Independence On the residual plot, no cluster of the residuals has obvious separation from the rest. Although we have some residual clusters on the plot, they are distributed among all the residual points and not very far from them. Then, the second assumption is satisfied.
+
+Assumption 3: Homoscedasticity We found that the residual plot does not have any fanning and spread out pattern, the residuals on the Residuals vs Fitted plot are also evenly distributed around the horizontal line. So, the third assumption is also satisfied.
+
+```{r echo=FALSE}
+#the residual plot
+plot(fit_ML, res.ML, 
+     ylab="Residuals", xlab=" fitted values", 
+     main="Residual plot") 
+abline(h=0, col="red", lwd=3, lty=2)
+
+## the residuals should be spread out randomly across 0 
+residuals = tibble(fit_ML, res.ML)
+ggplot(residuals, aes(x=fit_ML, y=res.ML))+geom_point()+geom_hline(yintercept=0, col="red")+xlab("fitted values")+ylab("residuals")
+```
+
+Assumption 4: Normality We observed the Q-Q Plot and found that most of the points are close enough to the QQ plot line and follow the trend of the line, but the points in the right tail are right-skewed and the distribution of the residuals is likely not to follow a normal distribution. In conclusion, model ML satisfied these four assumptions, which means the model ML is valid.
+
+```{r echo=FALSE}
+plot(ML)
+```
+
+### Multicollinearity
+
+We calculated the Variance Inflation Factor (VIF) of each predictors in the model ML and got the results shown in the table below, we found that each predictors' VIF are smaller than 10, then we conclude that this model ML does not have the multicollinearity issue.
+
+```{r echo=FALSE}
+VIF<-data.frame("Predictors"=c("Studying4","prereview_study","COVID4","Misceallenous4"),VIF=c(vif(ML)[1],vif(ML)[2],1.032366,1.048057))
+kable(VIF)
+```
+
+### Variable Transformation
+
+In order to reduce the issue of non-normality in the residuals distribution we discussed in the previous section, we applied Box-Cox transformation on the model ML to determine the transformation we need. The box-cox plot of lambda below shows us that the lambda is 1 which means we do not need to do transformation on model ML to fix the non-normality issue.
+
+Thus, we do need any variable transformation on the model ML.
+
+```{r echo=FALSE}
+boxcox(ML)
+```
+
+### Leverage, Outlier and Influential Points
+
+By calculating and comparing model ML's hatvalue, standardized residual and cook's distance to the corresponding threshold that calculated based on the number of predictors and observations, we found out there still exist some leverage points, outliers and influential points in the model ML.
+
+```{r echo=FALSE}
+cooks_dis_1 <- cooks.distance(ML)
+influ_point_1 <- length(which(cooks_dis_1>(4/(110-2))))
+
+
+hat_value_1 <- hatvalues(ML)
+leverage_point_1 <- length(which(hat_value_1 > 2*((4+1)/110)))
+
+
+std_res_1 <- rstandard(ML)
+outlier1 <- length(which(abs(std_res_1)>2))
+
+influential_outliers <- data.frame("Type"=c("Outlier","Leverage Point","Influential Point"),Counts=c(outlier1,leverage_point_1,influ_point_1))
+kable(influential_outliers)
+```
+
+## Conclusion
+
+We finally decided that the first model denoted as ML is the most useful one among all the models we have tested so far. We concluded that the number of hours a student studied per week, number of hours a student thought about Covid-19 in week 4, and number of hours a student spend on miscellaneous non-academic activities in week 4 are correlated to the student performance on the STA 302 term test.
+
+### Limitations
+
+We attempted to add a categorical variable to the model but did not work as well. There are still limitations to the model, when we did not perform a data transformation to fix the problem of linearity because the value of lambda indicated as 1 so there is no need for one. Thus, the problem of linearity still exists. Moreover, the data itself is collected on a voluntary basis, its accuracy might not be very high due to social desirability reasons. Further investigation should focus more on the measuring scale and other ways to fix the problem of linearity.
+
+### Contribution
+
+As of contribution to this project, we are a group of four and collaborate on this report. We discussed the model for the first meeting, Julie and Zhuqin finished the code part of the modelling, Zhuohang and Lexie finished the part of attempting data transformation and validating the model. At the very end, Zhuohang combined all the codes and Lexie checked for writing quality and wrapped everything together and submitted the project.
