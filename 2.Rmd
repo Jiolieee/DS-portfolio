@@ -1,5 +1,5 @@
 ---
-title: "Final Project"
+title: "Method of Data Analysis Final Project"
 output:
   pdf_document: default
   html_document: default
