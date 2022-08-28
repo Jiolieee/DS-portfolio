@@ -1,0 +1,148 @@
+---
+title: "Final Project"
+author: "Julie"
+date: "10/03/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Final Project
+
+Read the file and clean it
+```{r}
+library(tidyverse)
+library(latex2exp)
+library(dplyr)
+library(R.utils)
+df <- read.csv("Toronto progress portal - Key metrics.csv")
+df <- data.frame(df$measure_name, df$year,df$period_number_in_year,df$measure_value)
+```
+
+```{r,echo = FALSE}
+# subset(df, df$measure_name == "Number of Personal Bankruptcies (Ontario)")
+# slice_df <- df[c]
+# df %>% filter(row(df$measure_name) == "Number of Personal Bankruptcies (Ontario)")
+bankrupt <- df[1:179,]
+CPI <- df[2288:2455,]
+percent_change <- c()
+n <- 1
+while (n < length(bankrupt$df.measure_value)){
+        percent_change[n] <- bankrupt$df.measure_value[n+1]/bankrupt$df.measure_value[n]-1
+        n <- n+1
+}
+percent_change <- insert(percent_change, 1, values=0)
+bankrupt$percent <- percent_change
+bankrupt <- bankrupt %>% filter(bankrupt$df.year > 2007)
+bankrupt
+CPI <- CPI[1:167,]
+```
+```{r}
+summary(CPI$df.measure_value)
+summary(bankrupt$percent)
+```
+
+```{r}
+p1 <-  ggplot(bankrupt)+
+  geom_histogram(aes(x=percent, y=..density..),
+                 fill='thistle2',
+                 colour='black')+
+  geom_vline(xintercept=mean(bankrupt$percent), colour='red')+
+  labs(x='percentage change of personal bankruptcy rate',
+       y='Density',
+       title = "Distribution of personal bankruptcy change from 2008-2021",
+       subtitle='Red = average percentage change of perspnal bankruptcy ')
+p2 <-  ggplot(CPI)+
+  geom_histogram(aes(x=df.measure_value, y=..density..),
+                 fill='thistle2',
+                 colour='black')+
+  geom_vline(xintercept=mean(CPI$df.measure_value), colour='red')+
+  labs(x='percentage change of CPI index',
+       y='Density',
+       title = "Distribution of CPI change from 2008-2021",
+       subtitle='Red = CPI average percentage change')
+p1
+p2
+```
+
+```{r}
+#box plot& normal qq comparison to determine if we need to simulate more data 
+box_plot_bankrupt <- ggplot(bankrupt, aes(x = percent))+ 
+        geom_boxplot(outlier.colour = "red",
+        outlier.shape = 2,
+        outlier.size = 3) +
+        labs(x ="percentage change in bankruptcy rate")+
+    theme_classic()
+
+box_plot_CPI <- ggplot(CPI, aes(x = df.measure_value))+ 
+        geom_boxplot(outlier.colour = "red",
+        outlier.shape = 2,
+        outlier.size = 3) +
+         labs(x ="percentage change in CPI")+
+    theme_classic()
+box_plot_bankrupt
+box_plot_CPI
+```
+
+```{r}
+bankrupt$log_measure <- log(bankrupt$percent)
+CPI$log_measure <- log(CPI$df.measure_value)
+bankrupt %>%
+        ggplot(aes(sample = percent))+
+        geom_qq()+
+        geom_qq_line()+
+        labs(x = TeX(r'($N(0,1)$ Quantiles)'),
+             y = "Number of bankruptcy log quantiles",
+             title = "Normal Q-Q plot for bankruptcy percentage change")
+
+CPI %>%
+        ggplot(aes(sample = df.measure_value))+
+        geom_qq()+
+        geom_qq_line()+
+        labs(x = TeX(r'($N(0,1)$ Quantiles)'),
+             y = "Number of bankruptcy log quantiles",
+             title = "Normal Q-Q plot for CPI percentage change")
+```
+
+
+```{r} 
+#method 1: empirical bootstrapped confidence intervals for 2 variables
+set.seed(000)
+get_CI <- function(var){
+mean.sample <- mean(var) 
+sd.sample <- sd(var) 
+B <-  1000
+n.sample <- length(var)
+sim.t<- c()
+for (i in 1:B){
+        boot.sample <- sample(var, length(var), replace= T)
+        boot.mean <- mean(boot.sample)
+        boot.sd <- sd(boot.sample)
+        sim.t[i] <- (boot.mean - mean.sample)/ (boot.sd/sqrt(length(var)))
+}
+crit.t <- quantile(sim.t, probs = c(0.95,0.05))
+ci.student <- mean.sample - crit.t*sd.sample/sqrt(length(var))
+ci.student
+}
+get_CI(bankrupt$percent)
+get_CI(CPI$df.measure_value)
+```
+
+
+```{r}
+# method 2: Simple linear regression on 2 variables
+data.frame(CPI,bankrupt) %>%
+ggplot(aes(x=CPI$df.measure_value, y=bankrupt$percent))+
+geom_point()+
+labs(x="percentage change of CPI index",
+y="percentage change of personal bankruptcy rate",
+title="the association between percentage change of CPI index and personal bankruptcy rate ")
+
+model <- lm(bankrupt$percent ~ CPI$df.measure_value, data=data.frame(CPI,bankrupt))
+summary(model)
+```
+
+
+
